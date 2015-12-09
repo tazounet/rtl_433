@@ -59,6 +59,8 @@ add_executable(rtl_433
 	devices/efergy_e2_classic.c
 	devices/inovalley-kw9015b.c
 	devices/generic_temperature_sensor.c
+	devices/hideki.c
+	devices/oil_watchman.c
 )
 
 add_library(data data.c)

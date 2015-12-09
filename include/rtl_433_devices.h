@@ -43,7 +43,9 @@
 		DECL(kw9015b) \
 		DECL(generic_temperature_sensor) \
 		DECL(acurite_txr) \
-		DECL(acurite_986)
+		DECL(acurite_986) \
+		DECL(hideki_ts04) \
+		DECL(oil_watchman)
 
 typedef struct {
 	char name[256];
