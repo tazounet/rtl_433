@@ -13,7 +13,7 @@
 
 #include <stdint.h>
 
-#define PD_MAX_PULSES 1000			// Maximum number of pulses before forcing End Of Package
+#define PD_MAX_PULSES 1200			// Maximum number of pulses before forcing End Of Package
 #define PD_MIN_PULSES 16			// Minimum number of pulses before declaring a proper package
 #define PD_MIN_PULSE_SAMPLES 10		// Minimum number of samples in a pulse for proper detection
 #define PD_MIN_GAP_MS 10			// Minimum gap size in milliseconds to exceed to declare End Of Package
@@ -24,8 +24,12 @@
 /// Data for a compact representation of generic pulse train
 typedef struct {
 	unsigned int num_pulses;
-	unsigned int pulse[PD_MAX_PULSES];	// Contains width of a pulse	(high)
-	unsigned int gap[PD_MAX_PULSES];	// Width of gaps between pulses (low)
+	int pulse[PD_MAX_PULSES];	// Contains width of a pulse	(high)
+	int gap[PD_MAX_PULSES];		// Width of gaps between pulses (low)
+	int ook_low_estimate;		// Estimate for the OOK low level (base noise level) at beginning of package
+	int ook_high_estimate;		// Estimate for the OOK high level at end of package
+	int fsk_f1_est;				// Estimate for the F1 frequency for FSK
+	int fsk_f2_est;				// Estimate for the F2 frequency for FSK
 } pulse_data_t;
 
 
@@ -48,11 +52,11 @@ void pulse_data_print(const pulse_data_t *data);
 /// @return 0 if all input sample data is processed
 /// @return 1 if OOK package is detected (but all sample data is still not completely processed)
 /// @return 2 if FSK package is detected (but all sample data is still not completely processed)
-int detect_pulse_package(const int16_t *envelope_data, const int16_t *fm_data, uint32_t len, int16_t level_limit, uint32_t samp_rate, pulse_data_t *pulses, pulse_data_t *fsk_pulses);
+int pulse_detect_package(const int16_t *envelope_data, const int16_t *fm_data, int len, int16_t level_limit, uint32_t samp_rate, pulse_data_t *pulses, pulse_data_t *fsk_pulses);
 
 
 /// Analyze and print result
-void pulse_analyzer(pulse_data_t *data);
+void pulse_analyzer(pulse_data_t *data, uint32_t samp_rate);
 
 
 #endif /* INCLUDE_PULSE_DETECT_H_ */

@@ -103,11 +103,9 @@ ambient_weather_parser (bitbuffer_t *bitbuffer)
   uint16_t channel;
   uint16_t deviceID;
 
-  time_t time_now;
   char time_str[LOCAL_TIME_BUFLEN];
   data_t *data;
-  time(&time_now);
-  local_time_str(time_now, time_str);
+  local_time_str(0, time_str);
 
   if(bitbuffer->bits_per_row[0] != 195)	// There seems to be 195 bits in a correct message
     return 0;
@@ -142,10 +140,11 @@ ambient_weather_parser (bitbuffer_t *bitbuffer)
     deviceID = get_device_id (bb[0]);
 
     data = data_make("time", "", DATA_STRING, time_str,
-		     "device", "", DATA_INT, deviceID,
-		     "channel", "", DATA_INT, channel,
-		     "temperature_F", "", DATA_FORMAT, "%.1f", DATA_DOUBLE, temperature,
-		     "humidity", "", DATA_INT, humidity,
+			"model",	"",	DATA_STRING,	"Ambient Weather F007TH Thermo-Hygrometer",
+		     "device", "House Code", DATA_INT, deviceID,
+		     "channel", "Channel", DATA_INT, channel,
+		     "temperature_F", "Temperature", DATA_FORMAT, "%.1f", DATA_DOUBLE, temperature,
+		     "humidity", "Humidity", DATA_FORMAT, "%u %%", DATA_INT, humidity,
 		     NULL);
     data_acquired_handler(data);
 
@@ -173,9 +172,9 @@ static char *output_fields[] = {
 r_device ambient_weather = {
     .name           = "Ambient Weather Temperature Sensor",
     .modulation     = OOK_PULSE_MANCHESTER_ZEROBIT,
-    .short_limit    = 125,
+    .short_limit    = 500,
     .long_limit     = 0, // not used
-    .reset_limit    = 600,
+    .reset_limit    = 2400,
     .json_callback  = &ambient_weather_callback,
     .disabled       = 0,
     .demod_arg      = 0,

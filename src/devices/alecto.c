@@ -61,11 +61,14 @@ static int alectov1_callback(bitbuffer_t *bitbuffer) {
     uint8_t humidity, csum = 0, csum2 = 0;
     int i;
 
-	data_t *data;
-	time_t time_now;
-	char time_str[LOCAL_TIME_BUFLEN];
-	time(&time_now);
-	local_time_str(time_now, time_str);
+    data_t *data;
+    char time_str[LOCAL_TIME_BUFLEN];
+    unsigned bits = bitbuffer->bits_per_row[1];
+
+    if (bits != 36)
+        return 0;
+
+    local_time_str(0, time_str);
 
     if (bb[1][0] == bb[5][0] && bb[2][0] == bb[6][0] && (bb[1][4] & 0xf) == 0 && (bb[5][4] & 0xf) == 0
             && (bb[5][0] != 0 && bb[5][1] != 0)) {
@@ -197,10 +200,10 @@ static char *output_fields[] = {
 //Timing based on 250000
 r_device alectov1 = {
     .name           = "AlectoV1 Weather Sensor (Alecto WS3500 WS4500 Ventus W155/W044 Oregon)",
-    .modulation     = OOK_PWM_D,
-    .short_limit    = 3500 / 4, //875
-    .long_limit     = 7000 / 4, //1750
-    .reset_limit    = 15000 / 4, //3750
+    .modulation     = OOK_PULSE_PPM_RAW,
+    .short_limit    = 3500,
+    .long_limit     = 7000,
+    .reset_limit    = 10000,
     .json_callback  = &alectov1_callback,
     .disabled       = 0,
     .demod_arg      = 0,

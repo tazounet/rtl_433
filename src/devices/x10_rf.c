@@ -17,7 +17,7 @@ static int X10_RF_callback(bitbuffer_t *bitbuffer) {
 	// Validate package
 	if ((bitbuffer->bits_per_row[1] == 32)		// Dont waste time on a short package
 	// && (bb[1][0] == (uint8_t)(~bb[1][1]))		// Check integrity - apparently some chips may use both bytes..
-	 && (bb[1][2] == (uint8_t)(~bb[1][3]))		// Check integrity
+	 && (bb[1][2] == ((0xff & (~bb[1][3]))))		// Check integrity
 	)
 	{
 		fprintf(stdout, "X10 RF:\n");
@@ -32,9 +32,9 @@ static int X10_RF_callback(bitbuffer_t *bitbuffer) {
 r_device X10_RF = {
 	.name			= "X10 RF",
 	.modulation		= OOK_PULSE_PPM_RAW,
-	.short_limit	= 275,	// Short gap 150, long gap 420
-	.long_limit		= 700,	// Gap after sync is 4.5ms (1125)
-	.reset_limit	= 1500, // Gap seen between messages is ~10000 so lets get them individually
+	.short_limit	= 1100,	// Short gap 500µs, long gap 1680µs
+	.long_limit		= 2800,	// Gap after sync is 4.5ms (1125)
+	.reset_limit	= 6000, // Gap seen between messages is ~40ms so let's get them individually
 	.json_callback	= &X10_RF_callback,
 	.disabled		= 0,
 	.demod_arg		= 0,

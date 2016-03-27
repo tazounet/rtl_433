@@ -73,11 +73,9 @@ static int wt450_callback(bitbuffer_t *bitbuffer) {
    uint8_t bit;
    uint8_t parity = 0;
 
-   time_t time_now;
    char time_str[LOCAL_TIME_BUFLEN];
    data_t *data;
-   time(&time_now);
-   local_time_str(time_now, time_str);
+   local_time_str(0, time_str);
 
 //bitbuffer_print(bitbuffer);
 
@@ -155,11 +153,11 @@ static char *output_fields[] = {
 r_device wt450 = {
    .name          = "WT450",
    .modulation    = OOK_PULSE_CLOCK_BITS,
-   .short_limit   = 245,
-   .long_limit    = 488,
-   .reset_limit   = 4500,
+   .short_limit   = 980,
+   .long_limit    = 1952,
+   .reset_limit   = 18000,
    .json_callback = &wt450_callback,
    .disabled      = 0,
-   .demod_arg     = (unsigned long)&clock_bits_parameters_generic,
+   .demod_arg     = (uintptr_t)&clock_bits_parameters_generic,
    .fields        = output_fields
 };

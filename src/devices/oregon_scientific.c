@@ -1,6 +1,21 @@
 #include "rtl_433.h"
-#include "data.h"
+#include "data.h" 
 #include "util.h"
+
+/// Documentation for Oregon Scientific protocols can be found here:
+/// http://wmrx00.sourceforge.net/Arduino/OregonScientific-RF-Protocols.pdf
+
+// Sensors ID
+#define ID_THGR122N 0x1d20
+#define ID_THGR968  0x1d30
+#define ID_BHTR968  0x5d60
+#define ID_RGR968   0x2d10
+#define ID_THR228N  0xec40
+#define ID_THN132N  0xec40 // same as THR228N but different packet size
+#define ID_RTGN318  0x0cc3 // warning: id is from 0x0cc3 and 0xfcc3
+#define ID_PCR800   0x2914 
+#define ID_THGR810	0xf824
+#define ID_WGR800	0x1984
 
 float get_os_temperature(unsigned char *message, unsigned int sensor_id) {
   // sensor ID included  to support sensors with temp in different position
@@ -11,12 +26,26 @@ float get_os_temperature(unsigned char *message, unsigned int sensor_id) {
   return temp_c;
 }
 
+float get_os_rain_rate(unsigned char *message, unsigned int sensor_id) {
+	float rain_rate = 0;	// Nibbles 11..8 rain rate, LSD = 0.01 inches per hour
+	rain_rate = (((message[5]&0x0f) * 1000) +((message[5]>>4)*100)+((message[4]&0x0f)*10) + ((message[4]>>4)&0x0f)) / 100.0F;
+	return rain_rate;
+}
+
+float get_os_total_rain(unsigned char *message, unsigned int sensor_id) {
+	float total_rain = 0.0F; // Nibbles 17..12 Total rain, LSD = 0.001, 543210 = 012.345 inches
+	total_rain = (message[8]&0x0f) * 100.0F +((message[8]>>4)&0x0f)*10.0F +(message[7]&0x0f) 
+		+ ((message[7]>>4)&0x0f) / 10.0F + (message[6]&0x0f) / 100.0F + ((message[6]>>4)&0x0f)/1000.0F;
+	return total_rain;
+}
+
 unsigned int get_os_humidity(unsigned char *message, unsigned int sensor_id) {
   // sensor ID included to support sensors with humidity in different position
   int humidity = 0;
   humidity = ((message[6]&0x0f)*10)+(message[6]>>4);
   return humidity;
 }
+
 
 unsigned int get_os_uv(unsigned char *message, unsigned int sensor_id) {
   // sensor ID included to support sensors with uv in different position
@@ -29,7 +58,7 @@ unsigned int get_os_channel(unsigned char *message, unsigned int sensor_id) {
   // sensor ID included to support sensors with channel in different position
   int channel = 0;
   channel = ((message[2] >> 4)&0x0f);
-  if ((channel == 4) && ! ((sensor_id >= 0x0cc3) && (sensor_id <= 0xfcc3)))
+  if ((channel == 4) && (sensor_id & 0x0fff) != ID_RTGN318)
     channel = 3; // sensor 3 channel number is 0x04
   return channel;
 }
@@ -90,8 +119,10 @@ static int validate_os_checksum(unsigned char *msg, int checksum_nibble_idx) {
   if (sum_of_nibbles == checksum) {
     return 0;
   } else {
-    fprintf(stderr, "Checksum error in Oregon Scientific message.  Expected: %02x  Calculated: %02x\n", checksum, sum_of_nibbles);
-    fprintf(stderr, "Message: "); int i; for (i=0 ;i<((checksum_nibble_idx+4)>>1) ; i++) fprintf(stdout, "%02x ", msg[i]); fprintf(stdout, "\n\n");
+    if(debug_output) {
+      fprintf(stderr, "Checksum error in Oregon Scientific message.  Expected: %02x  Calculated: %02x\n", checksum, sum_of_nibbles);
+      fprintf(stderr, "Message: "); int i; for (i=0 ;i<((checksum_nibble_idx+4)>>1) ; i++) fprintf(stdout, "%02x ", msg[i]); fprintf(stdout, "\n\n");
+	}
     return 1;
   }
 }
@@ -102,8 +133,10 @@ static int validate_os_v2_message(unsigned char * msg, int bits_expected, int va
   if (bits_expected == valid_v2_bits_received) {
     return (validate_os_checksum(msg, nibbles_in_checksum));
   } else {
-    fprintf(stderr, "Bit validation error on Oregon Scientific message.  Expected %d bits, received error after bit %d \n",        bits_expected, valid_v2_bits_received);
-    fprintf(stderr, "Message: "); int i; for (i=0 ;i<(bits_expected+7)/8 ; i++) fprintf(stdout, "%02x ", msg[i]); fprintf(stdout, "\n\n");
+    if(debug_output) {
+      fprintf(stderr, "Bit validation error on Oregon Scientific message.  Expected %d bits, received error after bit %d \n",        bits_expected, valid_v2_bits_received);
+      fprintf(stderr, "Message: "); int i; for (i=0 ;i<(bits_expected+7)/8 ; i++) fprintf(stdout, "%02x ", msg[i]); fprintf(stdout, "\n\n");
+	}
   }
   return 1;
 }
@@ -176,39 +209,24 @@ static int oregon_scientific_v2_1_parser(bitbuffer_t *bitbuffer) {
     } // for (pattern...
 
     data_t *data;
-    time_t time_now;
     char time_str[LOCAL_TIME_BUFLEN];
-    time(&time_now);
-    local_time_str(time_now, time_str);
+    local_time_str(0, time_str);
 
     int sensor_id = (msg[0] << 8) | msg[1];
-    if ((sensor_id == 0x1d20) || (sensor_id == 0x1d30))    {
+    if ((sensor_id == ID_THGR122N) || (sensor_id == ID_THGR968)){
       if (validate_os_v2_message(msg, 153, num_valid_v2_bits, 15) == 0) {
-
-        if (sensor_id == 0x1d20) {
-          data = data_make("time",         "",            DATA_STRING, time_str,
-              "model",         "",            DATA_STRING, "Weather Sensor THGR122N",
-              "id",            "House Code",  DATA_INT,    get_os_rollingcode(msg, sensor_id),
-              "channel",       "Channel",     DATA_INT,    get_os_channel(msg, sensor_id),
-              "battery",       "Battery",     DATA_STRING, get_os_battery(msg, sensor_id) ? "LOW" : "OK",
-              "temperature_C", "Temperature", DATA_FORMAT, "%.02f C", DATA_DOUBLE, get_os_temperature(msg, sensor_id),
-              "humidity",      "Humidity",    DATA_FORMAT, "%u %%",   DATA_INT,    get_os_humidity(msg, sensor_id),
-              NULL);
-          data_acquired_handler(data);
-        } else {
-          data = data_make("time",         "",            DATA_STRING, time_str,
-              "model",         "",            DATA_STRING, "Weather Sensor THGR968 Outdoor",
-              "id",            "House Code",  DATA_INT,    get_os_rollingcode(msg, sensor_id),
-              "channel",       "Channel",     DATA_INT,    get_os_channel(msg, sensor_id),
-              "battery",       "Battery",     DATA_STRING, get_os_battery(msg, sensor_id) ? "LOW" : "OK",
-              "temperature_C", "Temperature", DATA_FORMAT, "%.02f C", DATA_DOUBLE, get_os_temperature(msg, sensor_id),
-              "humidity",      "Humidity",    DATA_FORMAT, "%u %%",   DATA_INT,    get_os_humidity(msg, sensor_id),
-              NULL);
-          data_acquired_handler(data);
-        }
+        data = data_make("time",         "",            DATA_STRING, time_str,
+            "model",         "",            DATA_STRING, (sensor_id == ID_THGR122N) ? "Weather Sensor THGR122N": "Weather Sensor THGR968 Outdoor",
+            "id",            "House Code",  DATA_INT,    get_os_rollingcode(msg, sensor_id),
+            "channel",       "Channel",     DATA_INT,    get_os_channel(msg, sensor_id),
+            "battery",       "Battery",     DATA_STRING, get_os_battery(msg, sensor_id) ? "LOW" : "OK",
+            "temperature_C", "Temperature", DATA_FORMAT, "%.02f C", DATA_DOUBLE, get_os_temperature(msg, sensor_id),
+            "humidity",      "Humidity",    DATA_FORMAT, "%u %%",   DATA_INT,    get_os_humidity(msg, sensor_id),
+            NULL);
+        data_acquired_handler(data);
       }
       return 1;
-    } else if (sensor_id == 0x5d60) {
+    } else if (sensor_id == ID_BHTR968) {
       if (validate_os_v2_message(msg, 185, num_valid_v2_bits, 19) == 0) {
         unsigned int comfort = msg[7] >>4;
         char *comfort_str="Normal";
@@ -220,12 +238,13 @@ static int oregon_scientific_v2_1_parser(bitbuffer_t *bitbuffer) {
         if      (forecast == 3)   forecast_str = "Rainy";
         else if (forecast == 6)   forecast_str = "Partly Cloudy";
         else if (forecast == 0xc) forecast_str = "Sunny";
-        float temp_c = get_os_temperature(msg, 0x5d60);
+        float temp_c = get_os_temperature(msg, sensor_id);
+        //TODO: change to new output system
         fprintf(stdout,"Weather Sensor BHTR968  Indoor    Temp: %3.1fC  %3.1fF   Humidity: %d%%", temp_c, ((temp_c*9)/5)+32, get_os_humidity(msg, 0x5d60));
         fprintf(stdout, " (%s) Pressure: %dmbar (%s)\n", comfort_str, ((msg[7] & 0x0f) | (msg[8] & 0xf0))+856, forecast_str);
       }
       return 1;
-    } else if (sensor_id == 0x2d10) {
+    } else if (sensor_id == ID_RGR968) {
       if (validate_os_v2_message(msg, 161, num_valid_v2_bits, 16) == 0) {
         float rain_rate = (((msg[4] &0x0f)*100)+((msg[4]>>4)*10) + ((msg[5]>>4)&0x0f)) /10.0F;
         float total_rain = (((msg[7]&0xf)*10000)+((msg[7]>>4)*1000) + ((msg[6]&0xf)*100)+((msg[6]>>4)*10) + (msg[5]&0xf))/10.0F;
@@ -241,7 +260,7 @@ static int oregon_scientific_v2_1_parser(bitbuffer_t *bitbuffer) {
         data_acquired_handler(data);
       }
       return 1;
-    } else if (sensor_id == 0xec40 && num_valid_v2_bits==153) {
+    } else if (sensor_id == ID_THR228N && num_valid_v2_bits==153) {
       if (validate_os_v2_message(msg, 153, num_valid_v2_bits, 12) == 0) {
 
         data = data_make("time",         "",            DATA_STRING, time_str,
@@ -254,7 +273,7 @@ static int oregon_scientific_v2_1_parser(bitbuffer_t *bitbuffer) {
         data_acquired_handler(data);
       }
       return 1;
-    } else if (sensor_id == 0xec40 && num_valid_v2_bits==129) {
+    } else if (sensor_id == ID_THN132N && num_valid_v2_bits==129) {
       if (validate_os_v2_message(msg, 129, num_valid_v2_bits, 12) == 0) {
 
         data = data_make("time",         "",            DATA_STRING, time_str,
@@ -267,7 +286,7 @@ static int oregon_scientific_v2_1_parser(bitbuffer_t *bitbuffer) {
         data_acquired_handler(data);
       }
       return 1;
-    } else if ((sensor_id >= 0x0cc3) && (sensor_id <= 0xfcc3)) {
+    } else if ((sensor_id & 0x0fff) == ID_RTGN318) {
       if (num_valid_v2_bits==153 && (validate_os_v2_message(msg, 153, num_valid_v2_bits, 15) == 0)) {
 
         data = data_make("time",         "",            DATA_STRING, time_str,
@@ -299,6 +318,9 @@ return 0;
 
 static int oregon_scientific_v3_parser(bitbuffer_t *bitbuffer) {
   bitrow_t *bb = bitbuffer->bb;
+    data_t *data;
+    char time_str[LOCAL_TIME_BUFLEN];
+    local_time_str(0, time_str);
 
   // Check stream for possible Oregon Scientific v3 protocol data (skip part of first and last bytes to get past sync/startup bit errors)
   if ((((bb[0][0]&0xf) == 0x0f) && (bb[0][1] == 0xff) && ((bb[0][2]&0xc0) == 0xc0)) ||
@@ -353,23 +375,72 @@ static int oregon_scientific_v3_parser(bitbuffer_t *bitbuffer) {
 
     if ((msg[0] == 0xf8) && (msg[1] == 0x24))    {
       if (validate_os_checksum(msg, 15) == 0) {
-        int  channel = ((msg[2] >> 4)&0x0f);
-        float temp_c = get_os_temperature(msg, 0xf824);
-        int humidity = get_os_humidity(msg, 0xf824);
-        fprintf(stdout,"Weather Sensor THGR810  Channel %d Temp: %3.1fC  %3.1fF   Humidity: %d%%\n", channel, temp_c, ((temp_c*9)/5)+32, humidity);
+        int  channel = get_os_channel(msg, ID_THGR810);
+        float temp_c = get_os_temperature(msg, ID_THGR810);
+        int humidity = get_os_humidity(msg, ID_THGR810);
+	int battery = get_os_battery(msg, ID_THGR810);
+        data = data_make("time",         "",            DATA_STRING, time_str,
+		"model",		"",		DATA_STRING, "Weather Sensor THGR810",
+		"id",			"House Code",	DATA_INT,	get_os_rollingcode(msg, ID_THGR810),
+		"channel",		"Channel",	DATA_INT,	channel,
+		"battery",		"Battery",	DATA_STRING,	battery?"LOW":"OK",
+		"temperature_C",	"Celcius",	DATA_FORMAT,	"%.02f C", DATA_DOUBLE, temp_c,
+		"temperature_F",	"Fahrenheit",	DATA_FORMAT,	"%.02f F", DATA_DOUBLE, ((temp_c*9)/5)+32,
+		"humidity",		"Humidity",	DATA_FORMAT,	"%u %%", DATA_INT, humidity,
+		NULL);
+
+        data_acquired_handler(data);
       }
       return 1;                  //msg[k] = ((msg[k] & 0x0F) << 4) + ((msg[k] & 0xF0) >> 4);
     } else if ((msg[0] == 0xd8) && (msg[1] == 0x74)) {
       if (validate_os_checksum(msg, 13) == 0) {   // ok
-        int  channel = ((msg[2] >> 4)&0x0f);
+        int  channel = get_os_channel(msg, 0xd874);
         int uvidx = get_os_uv(msg, 0xd874);
         fprintf(stdout, "Weather Sensor UVN800 Channel %d  UV index: %d \n", channel, uvidx);
       }
+    } else if ((msg[0] == 0x29) && (msg[1] == 0x14)) {
+      if (validate_os_checksum(msg, 18) == 0) {
+        int  channel = get_os_channel(msg, ID_PCR800);
+	int battery = get_os_battery(msg, ID_PCR800);
+	float rain_rate=get_os_rain_rate(msg, ID_PCR800);
+	float total_rain=get_os_total_rain(msg, ID_PCR800);
+	data = data_make("time",	"",		DATA_STRING, time_str,
+		"model",		"",		DATA_STRING, "Weather Sensor PCR800 Rain Gauge",
+		"id",			"House Code",	DATA_INT,	get_os_rollingcode(msg,ID_PCR800),
+		"channel",		"Channel",	DATA_INT,	channel,
+		"battery",		"Battery",	DATA_STRING,	battery?"LOW":"OK",
+		"rain_rate",		"Rain Rate",	DATA_FORMAT,	"%3.1f in/hr", DATA_DOUBLE, rain_rate,
+		"total_rain",		"Total Rain",	DATA_FORMAT,	"%3.1f in", DATA_DOUBLE, total_rain,
+		NULL);
+	data_acquired_handler(data);
+	}
+	return 1;
     } else if ((msg[0] == 0x19) && (msg[1] == 0x84)) {
       if (validate_os_checksum(msg, 17) == 0) {
-        float gustWindspeed = (msg[11]+msg[10])/100;
-        float quadrant = msg[8]*22.5;
-        fprintf(stdout, "Weather Sensor WGR800   Wind Gauge  Gust Wind Speed : %2.0f m/s Wind direction %3.0f dgrs\n", gustWindspeed, quadrant);
+	// 8 Direction, Not BCD – binary value from 0..15. Direction in degrees is value * 22.5 degrees.
+	// 13..11 Current Speed, meters per second, LSD is 0.1 m/s
+	// 16..14 Average speed, meters per second, LSD is 0.1 m/s
+/*
+	int i;
+	printf("13..11 current speed, 16..14 average speed\n");
+	for (i=0;i<34;i+=2) printf("%-2d ", i/10); printf("\n");
+	for (i=0;i<34;i+=2) printf("%-2d ",i%10);printf("\n");
+	for (i=0;i<17;i++) printf("%02x ", msg[i]); printf("\n");
+*/
+        float gustWindspeed = (msg[5]&0x0f) /10.0F + ((msg[6]>>4)&0x0f) *1.0F + (msg[6]&0x0f) * 10.0F;
+        float avgWindspeed = ((msg[7]>>4)&0x0f) / 10.0F + (msg[7]&0x0f) *1.0F + ((msg[8]>>4)&0x0f) * 10.0F;
+	int battery = get_os_battery(msg, ID_WGR800);
+        float quadrant = (0x0f&(msg[4]>>4))*22.5F;
+	data = data_make("time",	"",		DATA_STRING, 	time_str,
+		"model",		"",		DATA_STRING,	"Weather Sensor WGR800 Wind Gauge",
+		"id",			"House Code",	DATA_INT,	get_os_rollingcode(msg, ID_WGR800),
+		"channel",		"Channel",	DATA_INT,	get_os_channel(msg, ID_WGR800),
+		"battery",		"Battery",	DATA_STRING,	battery?"LOW":"OK",
+		"gust",			"Gust",		DATA_FORMAT,	"%2.1f m/s",DATA_DOUBLE, gustWindspeed,
+		"average",		"Average",	DATA_FORMAT,	"%2.1f m/s",DATA_DOUBLE, avgWindspeed,
+		"direction",		"Direction",	DATA_FORMAT,	"%3.1f degrees",DATA_DOUBLE, quadrant,
+		NULL);
+	data_acquired_handler(data);
       }
       return 1;
     } else if ((msg[0] == 0x20) || (msg[0] == 0x21) || (msg[0] == 0x22)
@@ -381,22 +452,37 @@ static int oregon_scientific_v3_parser(bitbuffer_t *bitbuffer) {
         fprintf(stdout, "current watts (230v)   = %.0f\n", rawAmp /(0.27*230)*1000);
       }
     } else if (msg[0] == 0x26) { //  Owl CM180 readings
-      int k;
-      for (k=0; k<BITBUF_COLS;k++) {  // Reverse nibbles
-        msg[k] = (msg[k] & 0xF0) >> 4 |  (msg[k] & 0x0F) << 4;
-      }
-      unsigned short int ipower = power(msg);
-      unsigned long long itotal = total(msg); 
-      float total_energy = itotal/3600/1000.0;
-      if (itotal) 
-        fprintf(stdout,"Energy Sensor CM180 Id %x%x power: %dW, total: %lluW, Total Energy: %.3fkWh\n", msg[0], msg[1], ipower, itotal, total_energy);
-      else
-        fprintf(stdout,"Energy Sensor CM180 Id %x%x power: %dW\n", msg[0], msg[1], ipower);  
-
+        msg[0]=msg[0] & 0x0f;
+        int valid = validate_os_checksum(msg, 23);
+        int k;
+        for (k=0; k<BITBUF_COLS;k++) {  // Reverse nibbles
+            msg[k] = (msg[k] & 0xF0) >> 4 |  (msg[k] & 0x0F) << 4;
+        }
+        unsigned short int ipower = power(msg);
+        unsigned long long itotal = total(msg); 
+        float total_energy = itotal/3600/1000.0;
+        if (itotal && valid == 0) {
+            data = data_make("time",	"",		DATA_STRING, 	time_str,
+                    "model",		"",		DATA_STRING,	"Energy Sensor CM180",
+                    "id",		"House Code",	DATA_INT,	msg[1]&0x0F,
+                    "power",		"Power",	DATA_FORMAT,	"%d W",DATA_INT, ipower,
+                    "energy_kWh",	"Energy",	DATA_FORMAT,	"%2.1f kWh",DATA_DOUBLE, total_energy,
+                    NULL);
+            data_acquired_handler(data);
+        } else if (!itotal) { 
+            data = data_make("time",	"",		DATA_STRING, 	time_str,
+                    "model",		"",		DATA_STRING,	"Energy Sensor CM180",
+                    "id",		"House Code",	DATA_INT,	msg[1]&0x0F,
+                    "power",		"Power",	DATA_FORMAT,	"%d W",DATA_INT, ipower,
+                    NULL);
+            data_acquired_handler(data);
+        }
     } else if ((msg[0] != 0) && (msg[1]!= 0)) { //  sync nibble was found  and some data is present...
-      fprintf(stderr, "Message received from unrecognized Oregon Scientific v3 sensor.\n");
-      fprintf(stderr, "Message: "); for (i=0 ; i<BITBUF_COLS ; i++) fprintf(stdout, "%02x ", msg[i]); fprintf(stdout, "\n");
-      fprintf(stderr, "    Raw: "); for (i=0 ; i<BITBUF_COLS ; i++) fprintf(stdout, "%02x ", bb[0][i]); fprintf(stdout,"\n\n");    
+      if(debug_output) {
+        fprintf(stderr, "Message received from unrecognized Oregon Scientific v3 sensor.\n");
+        fprintf(stderr, "Message: "); for (i=0 ; i<BITBUF_COLS ; i++) fprintf(stdout, "%02x ", msg[i]); fprintf(stdout, "\n");
+        fprintf(stderr, "    Raw: "); for (i=0 ; i<BITBUF_COLS ; i++) fprintf(stdout, "%02x ", bb[0][i]); fprintf(stdout,"\n\n");
+      }
     } else if (bb[0][3] != 0 ) {
       //fprintf(stdout, "\nPossible Oregon Scientific v3 message, but sync nibble wasn't found\n"); 
       //fprintf(stdout, "Raw Data: "); for (i=0 ; i<BITBUF_COLS ; i++) fprintf(stdout, "%02x ", bb[0][i]); fprintf(stdout,"\n\n");
@@ -431,9 +517,9 @@ static char *output_fields[] = {
 r_device oregon_scientific = {
   .name           = "Oregon Scientific Weather Sensor",
   .modulation     = OOK_PULSE_MANCHESTER_ZEROBIT,
-  .short_limit    = 110, // Nominal 1024Hz (122), but pulses are shorter than pauses 
+  .short_limit    = 440, // Nominal 1024Hz (488µs), but pulses are shorter than pauses 
   .long_limit     = 0, // not used
-  .reset_limit    = 600,
+  .reset_limit    = 2400,
   .json_callback  = &oregon_scientific_callback,
   .disabled       = 0,
   .demod_arg      = 0,

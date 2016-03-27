@@ -7,10 +7,10 @@
  * Update (LED flash) each 2:53
  *
  * Pulse Width Modulation with fixed rate and startbit 
- * Startbit     = 390 samples = 1.56 ms
- * Short pulse  = 190 samples = 0.76 ms = Logic 0
- * Long pulse   = 560 samples = 2.24 ms = Logic 1
- * Pulse rate   = 740 samples = 2.96 ms
+ * Startbit     = 390 samples = 1560 µs
+ * Short pulse  = 190 samples =  760 µs = Logic 0
+ * Long pulse   = 560 samples = 2240 µs = Logic 1
+ * Pulse rate   = 740 samples = 2960 µs
  * Burst length = 81000 samples = 324 ms
  *
  * Sequence of 5 times 21 bit separated by start bit (total of 111 pulses)
@@ -32,9 +32,12 @@
 */
 #include "rtl_433.h"
 #include "util.h"
+#include "data.h"
 
 //static int calibeur_rf104_callback(uint8_t bb[BITBUF_ROWS][BITBUF_COLS], int16_t bits_per_row[BITBUF_ROWS]) {
 static int calibeur_rf104_callback(bitbuffer_t *bitbuffer) {
+	data_t *data;
+	char time_str[LOCAL_TIME_BUFLEN];
 
 	uint8_t ID;
 	float temperature;
@@ -76,23 +79,34 @@ static int calibeur_rf104_callback(bitbuffer_t *bitbuffer) {
 		bits |= ((bb[1][2] & 0x08) << 1);	// [4]
 		humidity = bits;
 
-		fprintf(stdout, "Calibeur RF-104:\n");
-		fprintf(stdout, "ID          = 0x%02X\n", ID);
-		fprintf(stdout, "temperature = %.1f C\n", temperature);
-		fprintf(stdout, "humidity    = %2.0f %%\n", humidity);
-
+		local_time_str(0, time_str);
+		data = data_make("time",          "",            DATA_STRING, time_str,
+						"model",         "",            DATA_STRING, "Calibeur RF-104",
+						"id",            "ID",          DATA_INT, ID,
+						"temperature_C", "Temperature", DATA_FORMAT, "%.1f C", DATA_DOUBLE, temperature,
+						"humidity",      "Humidity",    DATA_FORMAT, "%2.0f %%", DATA_DOUBLE, humidity,
+						NULL);
+		data_acquired_handler(data);
 		return 1;
 	}
 	return 0;
 }
 
+static char *output_fields[] = {
+	"time",
+	"model",
+	"id",
+	"temperature_C",
+	"humidity",
+	NULL
+};
 
 r_device calibeur_RF104 = {
 	.name           = "Calibeur RF-104 Sensor",
 	.modulation     = OOK_PULSE_PWM_TERNARY,
-	.short_limit    = 290,	// Short pulse 190, Startbit 390, Long pulse 560
-	.long_limit     = 475,	// Maximum pulse period (long pulse + fixed gap)
-	.reset_limit    = 800,	// Longest gap (740-190)
+	.short_limit    = 1160,	// Short pulse 760µs, Startbit 1560µs, Long pulse 2240µs
+	.long_limit     = 1900,	// Maximum pulse period (long pulse + fixed gap)
+	.reset_limit    = 3200,	// Longest gap (2960-760µs)
 	.json_callback  = &calibeur_rf104_callback,
 	.disabled       = 0,
 	.demod_arg      = 1		// Startbit is middle bit

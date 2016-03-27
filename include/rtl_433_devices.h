@@ -35,7 +35,7 @@
 		DECL(chuango) \
 		DECL(generic_remote) \
 		DECL(tfa_twin_plus_303049) \
-		DECL(digitech_ws) \
+		DECL(fineoffset_wh1080) \
 		DECL(wt450) \
 		DECL(lacrossews) \
 		DECL(esperanza_ews) \
@@ -45,17 +45,25 @@
 		DECL(acurite_txr) \
 		DECL(acurite_986) \
 		DECL(hideki_ts04) \
-		DECL(oil_watchman)
+		DECL(oil_watchman) \
+		DECL(current_cost) \
+		DECL(emontx) \
+		DECL(ht680) \
+		DECL(s3318p) \
+		DECL(akhan_100F14) \
+		DECL(quhwa) \
+		DECL(oregon_scientific_v1) \
+		DECL(proove)
 
 typedef struct {
 	char name[256];
 	unsigned int modulation;
-	unsigned int short_limit;
-	unsigned int long_limit;
-	unsigned int reset_limit;
+	float short_limit;
+	float long_limit;
+	float reset_limit;
 	int (*json_callback)(bitbuffer_t *bitbuffer);
 	unsigned int disabled;
-	unsigned long demod_arg;	// Decoder specific optional argument (may be pointer to struct)
+	uintptr_t demod_arg;	// Decoder specific optional argument (may be pointer to struct)
 	char **fields;			// List of fields this decoder produces; required for CSV output. NULL-terminated.
 } r_device;
 

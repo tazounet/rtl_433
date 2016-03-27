@@ -30,10 +30,8 @@ static int brennstuhl_rcs_2044_process_row(int row, const bitbuffer_t *bitbuffer
 #if 0
   {
     // print raw bit sequence for debug purposes (before exclusion of invalid sequenced is executed)
-    time_t time_now;
     char time_str[LOCAL_TIME_BUFLEN];
-    time(&time_now);
-    local_time_str(time_now, time_str);
+    local_time_str(0, time_str);
     fprintf(stdout, "%s Brennstuhl RCS 2044: received RAW bit sequence (%d bits): ", time_str, length);
     for(int i=0; i<4; i++)
     {
@@ -69,10 +67,8 @@ static int brennstuhl_rcs_2044_process_row(int row, const bitbuffer_t *bitbuffer
 #if 0 && !defined(NDEBUG)
   {
     // print raw bit sequence for debug purposes (before exclusion of invalid sequenced is executed)
-    time_t time_now;
     char time_str[LOCAL_TIME_BUFLEN];
-    time(&time_now);
-    local_time_str(time_now, time_str);
+    local_time_str(0, time_str);
     fprintf(stdout, "%s Brennstuhl RCS 2044: received bit sequence: ", time_str);
     for(int i=0; i<4; i++)
     {
@@ -152,10 +148,8 @@ static int brennstuhl_rcs_2044_process_row(int row, const bitbuffer_t *bitbuffer
 
   {
     /* @todo: remove timestamp printing as soon as the controller takes this task */
-    time_t time_now;
     char time_str[LOCAL_TIME_BUFLEN];
-    time(&time_now);
-    local_time_str(time_now, time_str);
+    local_time_str(0, time_str);
     fprintf(stdout, "%s Brennstuhl RCS 2044: system code: %d%d%d%d%d. key: %c, state: %s\n",
       time_str,
       system_code[0], system_code[1], system_code[2], system_code[3], system_code[4],
@@ -178,9 +172,9 @@ static int brennstuhl_rcs_2044_callback(bitbuffer_t *bitbuffer)
 r_device brennstuhl_rcs_2044 = {
   .name          = "Brennstuhl RCS 2044",
   .modulation    = OOK_PULSE_PWM_RAW,
-  .short_limit   = 150,
-  .long_limit    = 1000,
-  .reset_limit   = 1000,
+  .short_limit   = 600,
+  .long_limit    = 4000,
+  .reset_limit   = 4000,
   .json_callback = &brennstuhl_rcs_2044_callback,
   .disabled      = 0,
   .demod_arg     = 0,

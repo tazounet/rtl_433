@@ -302,6 +302,7 @@ void data_free(data_t *data) {
 		data_t *prev_data = data;
 		if (dmt[data->type].value_release)
 			dmt[data->type].value_release(data->value);
+		free(data->format);
 		free(data->pretty_key);
 		free(data->key);
 		data = data->next;
@@ -316,11 +317,11 @@ void data_print(data_t* data, FILE *file, data_printer_t *printer, void *aux)
 		.aux     = aux
 	};
 	ctx.printer->print_data(&ctx, data, NULL, file);
-	fputc('\n', file);
+	if (file) {
+		fputc('\n', file);
+		fflush(file);
+	}
 }
-
-/* JSON printer */
-static void print_json_array(data_printer_context_t *printer_ctx, data_array_t *array, char *format, FILE *file);
 
 static void print_value(data_printer_context_t *printer_ctx, FILE *file, data_type_t type, void *value, char *format) {
 	switch (type) {
@@ -346,6 +347,7 @@ static void print_value(data_printer_context_t *printer_ctx, FILE *file, data_ty
 	}
 }
 
+/* JSON printer */
 static void print_json_array(data_printer_context_t *printer_ctx, data_array_t *array, char *format, FILE *file) {
 	int element_size = dmt[array->type].array_element_size;
 	char buffer[element_size];
@@ -392,7 +394,7 @@ static void print_json_string(data_printer_context_t *printer_ctx, const char *s
 
 static void print_json_double(data_printer_context_t *printer_ctx, double data, char *format, FILE *file)
 {
-	fprintf(file, "%f", data);
+	fprintf(file, "%.3f", data);
 }
 
 static void print_json_int(data_printer_context_t *printer_ctx, int data, char *format, FILE *file)
@@ -411,17 +413,22 @@ static void print_kv_data(data_printer_context_t *printer_ctx, data_t *data, cha
 		/* put a : between the first non-labeled and labeled */
 		if (separator) {
 			if (labeled && !was_labeled && !written_title) {
-				fprintf(file, ": ");
+				fprintf(file, "\n");
 				written_title = true;
 				separator = false;
 			} else {
 				if (was_labeled)
-					fprintf(file, ", ");
+					fprintf(file, "\n");
 				else
 					fprintf(file, " ");
 			}
 		}
-		fprintf(file, "%s", data->pretty_key);
+		if (!strcmp(data->key, "time"))
+                    /* fprintf(file, "") */ ;
+                else if (!strcmp(data->key, "model"))
+                    fprintf(file, ":\t");
+                else
+                    fprintf(file, "\t%s:\t", data->pretty_key);
 		if (labeled)
 			fputc(' ', file);
 		print_value(printer_ctx, file, data->type, data->value, data->format);
@@ -433,7 +440,7 @@ static void print_kv_data(data_printer_context_t *printer_ctx, data_t *data, cha
 
 static void print_kv_double(data_printer_context_t *printer_ctx, double data, char *format, FILE *file)
 {
-	fprintf(file, format ? format : "%f", data);
+	fprintf(file, format ? format : "%.3f", data);
 }
 
 static void print_kv_int(data_printer_context_t *printer_ctx, int data, char *format, FILE *file)
@@ -460,10 +467,9 @@ static void print_csv_data(data_printer_context_t *printer_ctx, data_t *data, ch
 	++csv->data_recursion;
 	for (i = 0; fields[i]; ++i) {
 		const char *key = fields[i];
-		data_t *iter, *found = NULL;
+		data_t *found = NULL;
 		if (i) fprintf(file, "%s", csv->separator);
-		iter = data;
-		for (iter = data, found; !found && iter; iter = iter->next)
+		for (data_t *iter = data; !found && iter; iter = iter->next)
 			if (strcmp(iter->key, key) == 0)
 				found = iter;
 

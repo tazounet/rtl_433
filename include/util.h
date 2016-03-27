@@ -15,8 +15,12 @@
 #include <time.h>
 
 // Helper macros
+#ifndef max
 #define max(a,b) ((a) > (b) ? (a) : (b))
+#endif
+#ifndef min
 #define min(a,b) ((a) < (b) ? (a) : (b))
+#endif
 
 /// Reverse the bits in an 8 bit byte
 /// @param x: input byte
@@ -46,6 +50,14 @@ uint8_t crc8(uint8_t const message[], unsigned nBytes, uint8_t polynomial, uint8
 /// @return CRC value
 uint8_t crc8le(uint8_t const message[], unsigned nBytes, uint8_t polynomial, uint8_t init);
 
+/// CRC-16
+///
+/// @param message[]: array of bytes to check
+/// @param nBytes: number of bytes in message
+/// @param polynomial: CRC polynomial
+/// @param init: starting crc value
+/// @return CRC value
+uint16_t crc16(uint8_t const message[], unsigned nBytes, uint16_t polynomial, uint16_t init);
 
 /// compute bit parity of a single byte
 ///
