@@ -53,7 +53,11 @@
 		DECL(akhan_100F14) \
 		DECL(quhwa) \
 		DECL(oregon_scientific_v1) \
-		DECL(proove)
+		DECL(proove) \
+		DECL(bresser_3ch) \
+		DECL(springfield) \
+		DECL(oregon_scientific_sl109h) \
+		DECL(acurite_606)
 
 typedef struct {
 	char name[256];
