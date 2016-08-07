@@ -13,6 +13,7 @@ rtl_433_SOURCES      = baseband.c \
                        devices/acurite.c \
                        devices/alecto.c \
                        devices/ambient_weather.c \
+                       devices/blyss.c \
                        devices/brennstuhl_rcs_2044.c \
                        devices/calibeur.c \
                        devices/cardin.c \
@@ -34,6 +35,7 @@ rtl_433_SOURCES      = baseband.c \
                        devices/ht680.c \
                        devices/inovalley-kw9015b.c \
                        devices/intertechno.c \
+                       devices/kedsum.c \
                        devices/lacrosse.c \
                        devices/lacrossews.c \
                        devices/mebus.c \
@@ -49,6 +51,7 @@ rtl_433_SOURCES      = baseband.c \
                        devices/springfield.c \
                        devices/steffen.c \
                        devices/tfa_twin_plus_30.3049.c \
+                       devices/tfa_pool_thermometer.c \
                        devices/valeo.c \
                        devices/waveman.c \
                        devices/wt450.c \
@@ -57,6 +60,9 @@ rtl_433_SOURCES      = baseband.c \
                        devices/akhan_100F14.c \
                        devices/proove.c \
                        devices/bresser_3ch.c \
-                       devices/oregon_scientific_sl109h.c
+                       devices/oregon_scientific_sl109h.c \
+                       devices/steelmate.c \
+                       devices/schraeder.c \
+                       devices/new_template.c
 
 rtl_433_LDADD        = $(LIBRTLSDR) $(LIBM)

@@ -57,7 +57,18 @@
 		DECL(bresser_3ch) \
 		DECL(springfield) \
 		DECL(oregon_scientific_sl109h) \
-		DECL(acurite_606)
+		DECL(acurite_606) \
+		DECL(tfa_pool_thermometer) \
+		DECL(kedsum) \
+		DECL(blyss) \
+		DECL(steelmate) \
+		DECL(schraeder) \
+		DECL(lightwave_rf) \
+		DECL(elro_db286a) \
+                DECL(efergy_optical) \
+                DECL(hondaremote) \
+		DECL(template)
+
 
 typedef struct {
 	char name[256];
